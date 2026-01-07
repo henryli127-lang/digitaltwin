@@ -8,13 +8,26 @@ import Link from 'next/link';
 export default function Home() {
   const router = useRouter();
   const [hasReplica, setHasReplica] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
     // Check if user has already created a digital replica
     const voiceId = localStorage.getItem('digital_replica_voice_id');
     const sceneId = localStorage.getItem('digital_replica_scene_id');
-    setHasReplica(!!(voiceId && sceneId));
-  }, []);
+    const hasBoth = !!(voiceId && sceneId);
+    setHasReplica(hasBoth);
+    setIsChecking(false);
+    
+    // If replica exists, show a notification and auto-redirect option
+    if (hasBoth) {
+      // Optional: Auto-redirect after 2 seconds if user doesn't interact
+      // Uncomment the following lines if you want auto-redirect:
+      // const timer = setTimeout(() => {
+      //   router.push('/chat');
+      // }, 2000);
+      // return () => clearTimeout(timer);
+    }
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white">
@@ -34,9 +47,21 @@ export default function Home() {
             创建你的 AI 数字分身。克隆你的声音和外观，然后与自己进行沉浸式对话。
           </p>
 
+          {/* Status Banner */}
+          {!isChecking && hasReplica && (
+            <div className="mb-8 max-w-2xl mx-auto">
+              <div className="px-6 py-4 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-green-400 font-medium">检测到已创建的数字分身，可以直接开始对话</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            {hasReplica ? (
+            {!isChecking && hasReplica ? (
               <>
                 <Link
                   href="/chat"
@@ -54,7 +79,7 @@ export default function Home() {
                   重新创建
                 </Link>
               </>
-            ) : (
+            ) : !isChecking ? (
               <Link
                 href="/create"
                 className="group px-8 py-4 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 rounded-xl font-semibold text-lg transition-all transform hover:scale-105 shadow-lg shadow-cyan-500/50 flex items-center gap-2"
@@ -63,6 +88,8 @@ export default function Home() {
                 创建你的数字分身
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
+            ) : (
+              <div className="px-8 py-4 text-gray-400">检查中...</div>
             )}
           </div>
         </div>

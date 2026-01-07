@@ -27,6 +27,7 @@ export default function ChatPage() {
   const [currentVideoUrl, setCurrentVideoUrl] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
+  const [isInitializing, setIsInitializing] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,6 +52,7 @@ export default function ChatPage() {
     setVoiceId(savedVoiceId);
     setSceneId(savedSceneId);
     setConnectionStatus('connected');
+    setIsInitializing(false);
     console.log('IDs loaded successfully');
   }, [router]);
 
@@ -285,6 +287,19 @@ export default function ChatPage() {
       handleSend();
     }
   };
+
+  // Show loading screen while initializing
+  if (isInitializing) {
+    return (
+      <div className="fixed inset-0 bg-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-cyan-400 animate-spin mx-auto mb-4" />
+          <p className="text-white text-xl font-medium">正在加载数字分身...</p>
+          <p className="text-gray-400 text-sm mt-2">检查配置中</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black">
