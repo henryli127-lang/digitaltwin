@@ -243,6 +243,18 @@ export default function ChatPage() {
       if (!talkResponse.ok) {
         const errorMsg = talkData.error || '视频生成失败';
         const debugInfo = talkData.debug ? `\n调试信息: ${JSON.stringify(talkData.debug, null, 2)}` : '';
+        
+        // Check if it's a TTS error (step: 'tts')
+        if (talkData.step === 'tts' && errorMsg.includes('语音合成失败')) {
+          throw new Error(
+            `${errorMsg}\n\n` +
+            `💡 建议：\n` +
+            `1. 语音克隆可能尚未完成，请等待几分钟后重试\n` +
+            `2. 或者前往创建页面重新上传音频文件进行语音克隆\n` +
+            `3. 确保音频文件清晰且时长足够（建议 10-30 秒）`
+          );
+        }
+        
         throw new Error(`${errorMsg}${debugInfo}`);
       }
 
@@ -266,10 +278,17 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Chat error:', error);
       setConnectionStatus('disconnected');
-      // Show error message
+      
+      // Parse error message to show user-friendly message
+      const errorText = error instanceof Error ? error.message : '出现了问题';
+      const isTTSError = errorText.includes('语音合成失败') || errorText.includes('TTS');
+      
+      // Show error message with helpful suggestions
       const errorMessage: Message = {
         id: Date.now().toString(),
-        text: `错误：${error instanceof Error ? error.message : '出现了问题'}`,
+        text: isTTSError 
+          ? `❌ ${errorText}\n\n💡 如果问题持续，请前往创建页面重新创建语音克隆。`
+          : `❌ 错误：${errorText}`,
         timestamp: new Date(),
         type: 'assistant',
       };

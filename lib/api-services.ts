@@ -312,7 +312,13 @@ export async function generateAudio(
       // 404 错误可能是 voice_id 不存在或无效
       if (response.status === 404 || data.code === 404) {
         throw new Error(
-          `TTS 失败：${errorMsg}。可能的原因：1) voice_id 不存在或无效 (当前: ${voiceId})；2) 语音克隆任务尚未完成；3) YiDevs 内部服务问题。请检查 voice_id 是否正确，或重新创建语音克隆。`
+          `语音合成失败：${errorMsg}\n` +
+          `使用的 voice_id: ${voiceId}\n` +
+          `可能的原因：\n` +
+          `1. voice_id 不存在或无效\n` +
+          `2. 语音克隆任务可能还在处理中（虽然返回了 voice_id，但任务可能尚未完成）\n` +
+          `3. YiDevs 内部服务问题\n\n` +
+          `建议：请前往创建页面重新上传音频文件进行语音克隆，确保任务完成后再使用。`
         );
       }
       
