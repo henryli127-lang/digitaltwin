@@ -138,6 +138,15 @@ export async function cloneVoice(
 
     const data = await response.json();
     
+    console.log('YiDevs Voice Clone API Response:', {
+      status: response.status,
+      code: data.code,
+      msg: data.msg,
+      voice_id: data.data?.voice_id,
+      task_id: data.data?.task_id,
+      fullResponse: JSON.stringify(data),
+    });
+    
     // Check if response is ok and code is 200
     if (!response.ok || data.code !== 200) {
       const errorMsg = data.msg || '未知错误';
@@ -159,6 +168,8 @@ export async function cloneVoice(
       );
     }
 
+    // Note: voice_id is returned immediately, but the cloning task may still be processing
+    // The task_id can be used to check the cloning status if needed
     return {
       voiceId: data.data.voice_id,
       name: name,
@@ -268,8 +279,7 @@ export async function generateAudio(
     console.log('YiDevs TTS API Request:', {
       url: `${baseUrl}/app/human/human/Voice/created`,
       body: {
-        text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
-        textLength: text.length,
+        text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
         voice_id: voiceId,
       },
     });
@@ -292,21 +302,22 @@ export async function generateAudio(
       msg: data.msg,
       hasData: !!data.data,
       audioUrl: data.data?.audio_url?.substring(0, 100),
+      fullResponse: JSON.stringify(data), // 记录完整响应以便调试
     });
     
     // Check if response is ok and code is 200
     if (!response.ok || data.code !== 200) {
       const errorMsg = data.msg || '未知错误';
       
-      // 404 错误通常是内部服务连接问题（如百度审核服务连接失败）
+      // 404 错误可能是 voice_id 不存在或无效
       if (response.status === 404 || data.code === 404) {
         throw new Error(
-          `TTS 服务暂时不可用：${errorMsg}。这可能是 YiDevs 内部服务问题，请稍后重试。`
+          `TTS 失败：${errorMsg}。可能的原因：1) voice_id 不存在或无效 (当前: ${voiceId})；2) 语音克隆任务尚未完成；3) YiDevs 内部服务问题。请检查 voice_id 是否正确，或重新创建语音克隆。`
         );
       }
       
       throw new Error(
-        `YiDevs TTS 错误：${errorMsg} (code: ${data.code || response.status})`
+        `YiDevs TTS 错误：${errorMsg} (code: ${data.code || response.status})。使用的 voice_id: ${voiceId}`
       );
     }
     

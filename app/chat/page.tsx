@@ -40,8 +40,6 @@ export default function ChatPage() {
     console.log('=== Loading IDs from localStorage ===');
     console.log('voiceId:', savedVoiceId);
     console.log('sceneId:', savedSceneId);
-    console.log('voiceId length:', savedVoiceId?.length);
-    console.log('sceneId length:', savedSceneId?.length);
 
     if (!savedVoiceId || !savedSceneId) {
       // Redirect to create page if not set up
@@ -222,11 +220,8 @@ export default function ChatPage() {
       console.log('=== Sending Talk Request ===');
       console.log('Request data:', {
         textReply: aiResponse.substring(0, 100) + (aiResponse.length > 100 ? '...' : ''),
-        textReplyLength: aiResponse.length,
         voiceId,
         sceneId,
-        voiceIdLength: voiceId?.length,
-        sceneIdLength: sceneId?.length,
       });
       
       const talkResponse = await fetch('/api/digital-human/talk', {

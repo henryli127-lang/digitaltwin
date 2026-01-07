@@ -19,11 +19,8 @@ export async function POST(request: NextRequest) {
     console.log('=== Digital Human Talk API Called ===');
     console.log('Request body:', {
       textReply: textReply?.substring(0, 100) + (textReply?.length > 100 ? '...' : ''),
-      textReplyLength: textReply?.length,
       voiceId,
       sceneId,
-      voiceIdLength: voiceId?.length,
-      sceneIdLength: sceneId?.length,
     });
 
     // Validate input
