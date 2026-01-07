@@ -58,8 +58,11 @@ export async function generateReply(
       ? `You are a digital replica of the user. ${context}`
       : 'You are a digital replica of the user. Respond naturally and conversationally.';
 
+    // Use gemini-2.5-flash-lite (latest lightweight model)
+    // API v1 is more stable than v1beta
+    const model = 'gemini-2.5-flash-lite';
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
