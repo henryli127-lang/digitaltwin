@@ -37,8 +37,15 @@ export default function ChatPage() {
     const savedVoiceId = localStorage.getItem('digital_replica_voice_id');
     const savedSceneId = localStorage.getItem('digital_replica_scene_id');
 
+    console.log('=== Loading IDs from localStorage ===');
+    console.log('voiceId:', savedVoiceId);
+    console.log('sceneId:', savedSceneId);
+    console.log('voiceId length:', savedVoiceId?.length);
+    console.log('sceneId length:', savedSceneId?.length);
+
     if (!savedVoiceId || !savedSceneId) {
       // Redirect to create page if not set up
+      console.log('Missing IDs, redirecting to create page');
       router.push('/create');
       return;
     }
@@ -46,6 +53,7 @@ export default function ChatPage() {
     setVoiceId(savedVoiceId);
     setSceneId(savedSceneId);
     setConnectionStatus('connected');
+    console.log('IDs loaded successfully');
   }, [router]);
 
   // Scroll to bottom when messages change
@@ -205,24 +213,48 @@ export default function ChatPage() {
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Step B: Generate video (TTS + Video)
+      const talkRequestData = {
+        textReply: aiResponse,
+        voiceId,
+        sceneId,
+      };
+      
+      console.log('=== Sending Talk Request ===');
+      console.log('Request data:', {
+        textReply: aiResponse.substring(0, 100) + (aiResponse.length > 100 ? '...' : ''),
+        textReplyLength: aiResponse.length,
+        voiceId,
+        sceneId,
+        voiceIdLength: voiceId?.length,
+        sceneIdLength: sceneId?.length,
+      });
+      
       const talkResponse = await fetch('/api/digital-human/talk', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          textReply: aiResponse,
-          voiceId,
-          sceneId,
-        }),
+        body: JSON.stringify(talkRequestData),
       });
 
+      const talkData = await talkResponse.json();
+      
+      console.log('=== Talk API Response ===');
+      console.log('Status:', talkResponse.status, talkResponse.statusText);
+      console.log('Response data:', talkData);
+
       if (!talkResponse.ok) {
-        throw new Error('Failed to generate video');
+        const errorMsg = talkData.error || '视频生成失败';
+        const debugInfo = talkData.debug ? `\n调试信息: ${JSON.stringify(talkData.debug, null, 2)}` : '';
+        throw new Error(`${errorMsg}${debugInfo}`);
       }
 
-      const talkData = await talkResponse.json();
+      if (!talkData.taskId) {
+        throw new Error(`无效的响应：缺少 taskId。响应数据：${JSON.stringify(talkData)}`);
+      }
+      
       const taskId = talkData.taskId;
+      console.log('Task ID received:', taskId);
 
       // Step C: Poll for task status
       const videoUrl = await pollTaskStatus(taskId);

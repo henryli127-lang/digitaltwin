@@ -260,6 +260,20 @@ export async function generateAudio(
   }
 
   try {
+    const requestBody = {
+      text,
+      voice_id: voiceId,
+    };
+    
+    console.log('YiDevs TTS API Request:', {
+      url: `${baseUrl}/app/human/human/Voice/created`,
+      body: {
+        text: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+        textLength: text.length,
+        voice_id: voiceId,
+      },
+    });
+    
     const response = await fetch(`${baseUrl}/app/human/human/Voice/created`, {
       method: 'POST',
       headers: {
@@ -267,13 +281,18 @@ export async function generateAudio(
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        text,
-        voice_id: voiceId,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
+    console.log('YiDevs TTS API Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      code: data.code,
+      msg: data.msg,
+      hasData: !!data.data,
+      audioUrl: data.data?.audio_url?.substring(0, 100),
+    });
     
     // Check if response is ok and code is 200
     if (!response.ok || data.code !== 200) {
@@ -336,6 +355,17 @@ export async function generateVideo(
       scene_task_id: sceneTaskId,
       audio_url: audioUrl,
     };
+    
+    console.log('YiDevs Video Generation API Request:', {
+      url: `${baseUrl}/app/human/human/Musetalk/create`,
+      body: {
+        callback_url: callbackUrl,
+        scene_task_id: sceneTaskId,
+        audio_url: audioUrl.substring(0, 100) + '...',
+        sceneTaskIdLength: sceneTaskId?.length,
+        audioUrlLength: audioUrl?.length,
+      },
+    });
 
     const response = await fetch(`${baseUrl}/app/human/human/Musetalk/create`, {
       method: 'POST',
@@ -347,19 +377,38 @@ export async function generateVideo(
       body: JSON.stringify(requestBody),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    const data = await response.json();
+    console.log('YiDevs Video Generation API Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      code: data.code,
+      msg: data.msg,
+      hasData: !!data.data,
+      videoTaskId: data.data?.video_task_id,
+      billId: data.data?.bill_id,
+      fullResponse: JSON.stringify(data),
+    });
+    
+    // Check if response is ok and code is 200
+    if (!response.ok || data.code !== 200) {
+      const errorMsg = data.msg || '未知错误';
+      
+      // 404 错误可能是参数错误或服务不可用
+      if (response.status === 404 || data.code === 404) {
+        throw new Error(
+          `视频生成服务暂时不可用：${errorMsg}。请检查 scene_task_id 和 audio_url 是否正确。`
+        );
+      }
+      
       throw new Error(
-        `Yidevs video generation error: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`
+        `YiDevs 视频生成错误：${errorMsg} (code: ${data.code || response.status})`
       );
     }
-
-    const data = await response.json();
     
     // YiDevs API returns: { code: 200, msg: "success", data: { video_task_id: ..., bill_id: ... } }
-    if (data.code !== 200 || !data.data?.video_task_id) {
+    if (!data.data?.video_task_id) {
       throw new Error(
-        `Invalid response format from Yidevs video generation API: ${JSON.stringify(data)}`
+        `无效的视频生成响应格式：${JSON.stringify(data)}`
       );
     }
 
