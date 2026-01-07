@@ -273,19 +273,28 @@ export async function generateAudio(
       }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        `Yidevs TTS error: ${response.status} ${response.statusText}. ${JSON.stringify(errorData)}`
-      );
-    }
-
     const data = await response.json();
     
-    // YiDevs API returns: { code: 200, msg: "success", data: { audio_url: "...", audio_base64: "..." } }
-    if (data.code !== 200 || !data.data?.audio_url) {
+    // Check if response is ok and code is 200
+    if (!response.ok || data.code !== 200) {
+      const errorMsg = data.msg || '未知错误';
+      
+      // 404 错误通常是内部服务连接问题（如百度审核服务连接失败）
+      if (response.status === 404 || data.code === 404) {
+        throw new Error(
+          `TTS 服务暂时不可用：${errorMsg}。这可能是 YiDevs 内部服务问题，请稍后重试。`
+        );
+      }
+      
       throw new Error(
-        `Invalid response format from Yidevs TTS API: ${JSON.stringify(data)}`
+        `YiDevs TTS 错误：${errorMsg} (code: ${data.code || response.status})`
+      );
+    }
+    
+    // YiDevs API returns: { code: 200, msg: "success", data: { audio_url: "...", audio_base64: "..." } }
+    if (!data.data?.audio_url) {
+      throw new Error(
+        `无效的 TTS 响应格式：${JSON.stringify(data)}`
       );
     }
 
