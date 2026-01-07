@@ -1,29 +1,87 @@
 /**
  * File Upload Helper
- * Handles saving FormData files to local storage
+ * Handles saving FormData files to local storage or Vercel Blob Storage
  */
 
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { put } from '@vercel/blob';
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads');
 
 /**
- * Ensures the upload directory exists
+ * Checks if we're in a serverless environment (like Vercel)
+ */
+function isServerlessEnvironment(): boolean {
+  return !!(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.VERCEL_ENV
+  );
+}
+
+/**
+ * Uploads file to Vercel Blob Storage
+ * @param file - The file to upload
+ * @returns The public URL of the uploaded file
+ */
+async function uploadToBlobStorage(file: File): Promise<string> {
+  try {
+    // Generate a unique filename
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const extension = file.name.split('.').pop() || 'bin';
+    const filename = `uploads/${timestamp}-${randomString}.${extension}`;
+
+    // Convert File to Buffer
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Upload to Vercel Blob Storage
+    const blob = await put(filename, buffer, {
+      access: 'public',
+      contentType: file.type || 'application/octet-stream',
+    });
+
+    return blob.url;
+  } catch (error) {
+    throw new Error(
+      `Failed to upload to Blob Storage: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}
+
+/**
+ * Ensures the upload directory exists (only for non-serverless environments)
  */
 async function ensureUploadDir(): Promise<void> {
+  if (isServerlessEnvironment()) {
+    return; // Skip in serverless environments
+  }
   if (!existsSync(UPLOAD_DIR)) {
     await mkdir(UPLOAD_DIR, { recursive: true });
   }
 }
 
 /**
- * Saves a file from FormData to the local uploads directory
+ * Saves a file from FormData to local storage or Vercel Blob Storage
  * @param file - The file from FormData
- * @returns The public URL path to the uploaded file
+ * @returns The public URL path (local) or Blob Storage URL (serverless)
  */
 export async function saveUploadedFile(file: File): Promise<string> {
+  // In serverless environments (like Vercel), use Blob Storage
+  if (isServerlessEnvironment()) {
+    try {
+      return await uploadToBlobStorage(file);
+    } catch (error) {
+      throw new Error(
+        `Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  // For local development, save to disk
   try {
     await ensureUploadDir();
 

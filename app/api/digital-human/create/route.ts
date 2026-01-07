@@ -62,19 +62,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save file locally first to get a public URL
-    const localUrl = await saveUploadedFile(file);
+    // Save file to local storage or Vercel Blob Storage
+    const fileUrl = await saveUploadedFile(file);
     
-    // Construct full URL for YiDevs API (needs absolute URL)
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const fullFileUrl = `${baseUrl}${localUrl}`;
+    // Determine the full file URL
+    let fullFileUrl: string;
+    
+    // Check if it's already a full URL (from Blob Storage) or a relative path (local)
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+      // Already a full URL from Blob Storage
+      fullFileUrl = fileUrl;
+    } else {
+      // Local development: construct full URL
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+      fullFileUrl = `${baseUrl}${fileUrl}`;
 
-    // Validate that the URL is publicly accessible (not localhost)
-    if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+      // Validate that the URL is publicly accessible (not localhost)
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      if ((baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) && !isDevelopment) {
+        return NextResponse.json(
+          { 
+            error: '音频 URL 无法被外部访问。请设置 NEXT_PUBLIC_BASE_URL 为公网可访问的 URL。',
+            hint: '如果已部署到 Vercel，请确保 NEXT_PUBLIC_BASE_URL=https://digitaltwin-pi-teal.vercel.app'
+          },
+          { status: 400 }
+        );
+      }
+    }
+    
+    // Ensure URL starts with http:// or https://
+    if (!fullFileUrl.startsWith('http://') && !fullFileUrl.startsWith('https://')) {
       return NextResponse.json(
         { 
-          error: '音频 URL 无法被外部访问。请设置 NEXT_PUBLIC_BASE_URL 为公网可访问的 URL（如使用 ngrok 创建的 URL）。详见 CALLBACK_SETUP.md',
-          hint: '本地开发请使用: ngrok http 3000，然后将返回的 HTTPS URL 设置为 NEXT_PUBLIC_BASE_URL'
+          error: '音频 URL 格式错误，必须以 http:// 或 https:// 开头',
+          hint: `当前 URL: ${fullFileUrl}`
         },
         { status: 400 }
       );
@@ -82,18 +103,19 @@ export async function POST(request: NextRequest) {
 
     // Clone voice or face using Yidevs API
     if (type === 'voice') {
-      // YiDevs API requires audio_url (full URL), not file upload
+      // YiDevs API requires audio_url (full URL), now using Blob Storage URL
       const result = await cloneVoice(fullFileUrl, name);
       return NextResponse.json({
         success: true,
         type: 'voice',
         voiceId: result.voiceId,
         name: result.name,
-        localUrl, // Return local URL for reference
+        fileUrl: fullFileUrl, // Return full URL for reference
       });
     } else {
       // For face cloning, YiDevs API requires video_url (full URL) and callback_url
       // Construct callback URL for scene cloning completion notification
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       const callbackUrl = `${baseUrl}/api/digital-human/callback`;
       const result = await cloneFace(fullFileUrl, name, callbackUrl);
       return NextResponse.json({
@@ -102,7 +124,7 @@ export async function POST(request: NextRequest) {
         sceneId: result.sceneId,
         sceneTaskId: result.sceneTaskId, // For video generation, we need scene_task_id
         name: result.name,
-        localUrl, // Return local URL for reference
+        fileUrl: fullFileUrl, // Return full URL for reference
       });
     }
   } catch (error) {
