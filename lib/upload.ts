@@ -34,12 +34,12 @@ async function uploadToBlobStorage(file: File): Promise<string> {
     const extension = file.name.split('.').pop() || 'bin';
     const filename = `uploads/${timestamp}-${randomString}.${extension}`;
 
-    // Convert File to Buffer
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // Convert File to ArrayBuffer (put() accepts File, Blob, ArrayBuffer, or Readable)
+    const arrayBuffer = await file.arrayBuffer();
 
     // Upload to Vercel Blob Storage
-    const blob = await put(filename, buffer, {
+    // put() accepts: File, Blob, ArrayBuffer, Readable stream, or string
+    const blob = await put(filename, arrayBuffer, {
       access: 'public',
       contentType: file.type || 'application/octet-stream',
     });
