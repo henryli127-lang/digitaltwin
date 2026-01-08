@@ -31,6 +31,121 @@ export default function CreatePage() {
   const voiceFileInputRef = useRef<HTMLInputElement>(null);
   const videoFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Convert WebM audio to MP3
+  const convertWebMToMP3 = async (webmBlob: Blob): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const fileReader = new FileReader();
+
+      fileReader.onload = async (e) => {
+        try {
+          const arrayBuffer = e.target?.result as ArrayBuffer;
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+          // Convert AudioBuffer to WAV
+          const wav = audioBufferToWav(audioBuffer);
+          
+          // Convert WAV to MP3 using lamejs
+          const mp3Data = wavToMp3(wav);
+          
+          const mp3Blob = new Blob([new Uint8Array(mp3Data)], { type: 'audio/mpeg' });
+          resolve(mp3Blob);
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      fileReader.onerror = reject;
+      fileReader.readAsArrayBuffer(webmBlob);
+    });
+  };
+
+  // Convert AudioBuffer to WAV
+  const audioBufferToWav = (buffer: AudioBuffer): ArrayBuffer => {
+    const length = buffer.length;
+    const numberOfChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bytesPerSample = 2;
+    const blockAlign = numberOfChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = length * blockAlign;
+    const bufferSize = 44 + dataSize;
+    const arrayBuffer = new ArrayBuffer(bufferSize);
+    const view = new DataView(arrayBuffer);
+
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, bufferSize - 8, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    // Convert float samples to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      for (let channel = 0; channel < numberOfChannels; channel++) {
+        const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+        offset += 2;
+      }
+    }
+
+    return arrayBuffer;
+  };
+
+  // Convert WAV to MP3 using lamejs
+  const wavToMp3 = (wav: ArrayBuffer): Uint8Array => {
+    const wavView = new DataView(wav);
+    const sampleRate = wavView.getUint32(24, true);
+    const numChannels = wavView.getUint16(22, true);
+    const dataOffset = 44;
+    const dataLength = wavView.getUint32(40, true);
+    const samples = new Int16Array(wav, dataOffset, dataLength / 2);
+
+    // @ts-ignore
+    const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
+    const sampleBlockSize = 1152;
+    const mp3Data: number[] = [];
+
+    for (let i = 0; i < samples.length; i += sampleBlockSize) {
+      const sampleChunk = samples.subarray(i, i + sampleBlockSize);
+      let mp3buf: Int8Array;
+
+      if (numChannels === 1) {
+        mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+      } else {
+        const left = sampleChunk.filter((_, idx) => idx % 2 === 0);
+        const right = sampleChunk.filter((_, idx) => idx % 2 === 1);
+        mp3buf = mp3encoder.encodeBuffer(left, right);
+      }
+
+      if (mp3buf.length > 0) {
+        mp3Data.push(...Array.from(mp3buf));
+      }
+    }
+
+    const remaining = mp3encoder.flush() as Int8Array;
+    if (remaining.length > 0) {
+      mp3Data.push(...Array.from(remaining));
+    }
+
+    return new Uint8Array(mp3Data);
+  };
+
   // Load saved state from localStorage
   useEffect(() => {
     const savedVoiceId = localStorage.getItem('digital_replica_voice_id');
@@ -83,12 +198,24 @@ export default function CreatePage() {
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
-        setAudioBlob(audioBlob);
-        const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
+      mediaRecorder.onstop = async () => {
+        const webmBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
         stream.getTracks().forEach(track => track.stop());
+        
+        // Convert WebM to MP3
+        try {
+          const mp3Blob = await convertWebMToMP3(webmBlob);
+          setAudioBlob(mp3Blob);
+          const url = URL.createObjectURL(mp3Blob);
+          setAudioUrl(url);
+          console.log('✅ Converted WebM to MP3 successfully');
+        } catch (error) {
+          console.error('Failed to convert to MP3, using original format:', error);
+          // Fallback to original WebM if conversion fails
+          setAudioBlob(webmBlob);
+          const url = URL.createObjectURL(webmBlob);
+          setAudioUrl(url);
+        }
       };
 
       mediaRecorder.start();
@@ -179,16 +306,9 @@ export default function CreatePage() {
   const handleRecordedAudioUpload = async () => {
     if (!audioBlob) return;
 
-    // Determine file extension and MIME type based on blob type
-    let extension = 'mp3';
-    let mimeType = 'audio/mpeg';
-    if (audioBlob.type.includes('webm')) {
-      extension = 'webm';
-      mimeType = 'audio/webm';
-    } else if (audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp3')) {
-      extension = 'mp3';
-      mimeType = 'audio/mpeg';
-    }
+    // Force MP3 format
+    const extension = 'mp3';
+    const mimeType = 'audio/mpeg';
 
     // Convert Blob to File with correct extension
     const audioFile = new File([audioBlob], `recording.${extension}`, { type: mimeType });
