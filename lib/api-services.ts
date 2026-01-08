@@ -10,6 +10,7 @@ export interface GeminiResponse {
 
 export interface YidevsVoiceCloneResponse {
   voiceId: string;
+  taskId?: string; // task_id from voice clone API, indicates the cloning task is still processing
   name: string;
 }
 
@@ -200,8 +201,11 @@ export async function cloneVoice(
 
     // Note: voice_id is returned immediately, but the cloning task may still be processing
     // The task_id can be used to check the cloning status if needed
+    // IMPORTANT: Even though voice_id is returned, the voice cloning task may take 2-5 minutes to complete
+    // Users should wait before using the voice_id for TTS
     return {
       voiceId: data.data.voice_id,
+      taskId: data.data?.task_id?.toString(), // Include task_id for reference
       name: name,
     };
   } catch (error) {
@@ -341,14 +345,35 @@ export async function generateAudio(
       
       // 404 错误可能是 voice_id 不存在或无效
       if (response.status === 404 || data.code === 404) {
+        // Check if this is a content moderation error (from previous logs)
+        const isContentModerationError = errorMsg.includes('cURL error 7') || 
+                                        errorMsg.includes('baidubce.com');
+        
+        if (isContentModerationError) {
+          throw new Error(
+            `语音合成失败：${errorMsg}\n` +
+            `这是 YiDevs 内部服务问题（内容审核服务连接失败），请稍后重试。`
+          );
+        }
+        
         throw new Error(
           `语音合成失败：${errorMsg}\n` +
-          `使用的 voice_id: ${voiceId}\n` +
+          `使用的 voice_id: ${voiceId}\n\n` +
+          `🔍 问题分析：\n` +
+          `根据创建日志，语音克隆任务已创建并返回了 voice_id 和 task_id。\n` +
+          `但是，语音克隆任务可能需要 2-5 分钟才能完成处理。\n\n` +
           `可能的原因：\n` +
-          `1. voice_id 不存在或无效\n` +
-          `2. 语音克隆任务可能还在处理中（虽然返回了 voice_id，但任务可能尚未完成）\n` +
-          `3. YiDevs 内部服务问题\n\n` +
-          `建议：请前往创建页面重新上传音频文件进行语音克隆，确保任务完成后再使用。`
+          `1. ⏰ 语音克隆任务还在处理中（最常见）- 虽然返回了 voice_id，但任务可能尚未完成\n` +
+          `2. ❌ voice_id 不存在或无效\n` +
+          `3. 🌐 音频文件可能无法访问（虽然创建时验证通过，但 YiDevs 可能无法访问）\n` +
+          `4. 🔧 YiDevs 内部服务问题\n\n` +
+          `💡 解决建议（按优先级）：\n` +
+          `1. ⏳ 等待 5-10 分钟后重试（最可能解决问题）\n` +
+          `2. 🔍 检查创建语音克隆时的服务器日志，确认：\n` +
+          `   - audio_url 是否可访问（应该看到 status: 200）\n` +
+          `   - 返回的 task_id 是什么（任务可能还在处理）\n` +
+          `3. 🔄 如果等待后仍然失败，请重新创建语音克隆\n` +
+          `4. ✅ 确保音频文件清晰且时长足够（建议 10-30 秒）`
         );
       }
       

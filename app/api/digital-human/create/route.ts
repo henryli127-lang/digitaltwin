@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
         'audio/mp3',
         'audio/wav',
         'audio/webm',
+        'audio/mp4',
       ];
       const validation = validateFile(file, allowedTypes, 50);
       if (!validation.valid) {
@@ -136,19 +137,30 @@ export async function POST(request: NextRequest) {
       console.log('=== Calling YiDevs Voice Clone API ===');
       console.log('Audio URL to send:', fullFileUrl);
       
-      // YiDevs API requires audio_url (full URL), now using Blob Storage URL
+      // YiDevs API requires audio_url (full URL), now using OSS URL
       const result = await cloneVoice(fullFileUrl, name);
       
       console.log('=== Voice Clone Result ===');
       console.log('Voice ID:', result.voiceId);
+      console.log('Task ID:', result.taskId);
       console.log('Name:', result.name);
+      
+      if (result.taskId) {
+        console.log('⚠️ 重要提示：语音克隆任务正在处理中（task_id: ' + result.taskId + '）。');
+        console.log('⚠️ 虽然返回了 voice_id，但任务可能需要 2-5 分钟才能完成。');
+        console.log('⚠️ 如果立即使用此 voice_id 进行 TTS 时出现 404 错误，请等待几分钟后重试。');
+      }
       
       return NextResponse.json({
         success: true,
         type: 'voice',
         voiceId: result.voiceId,
+        taskId: result.taskId, // Include task_id for reference
         name: result.name,
         fileUrl: fullFileUrl, // Return full URL for reference
+        warning: result.taskId 
+          ? `语音克隆任务正在处理中（task_id: ${result.taskId}）。虽然返回了 voice_id，但任务可能需要 2-5 分钟才能完成。如果立即使用此 voice_id 进行 TTS 时出现 404 错误，请等待几分钟后重试。`
+          : '语音克隆任务可能还在处理中。如果立即使用此 voice_id 时出现错误，请等待 5-10 分钟后重试。',
         debug: {
           fileUrl: fullFileUrl,
           fileSize: file.size,

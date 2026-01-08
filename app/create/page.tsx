@@ -58,9 +58,24 @@ export default function CreatePage() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      
+      // Try to use MP3 format, fallback to WebM if not supported
+      let mimeType = 'audio/mpeg';
+      if (!MediaRecorder.isTypeSupported('audio/mpeg')) {
+        // Fallback to WebM
+        mimeType = 'audio/webm';
+      }
+      
+      console.log('Using MIME type for recording:', mimeType);
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+      });
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      
+      // Store mimeType for use in onstop callback
+      const recordedMimeType = mimeType;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -69,7 +84,7 @@ export default function CreatePage() {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: recordedMimeType });
         setAudioBlob(audioBlob);
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
@@ -164,8 +179,19 @@ export default function CreatePage() {
   const handleRecordedAudioUpload = async () => {
     if (!audioBlob) return;
 
-    // Convert Blob to File
-    const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+    // Determine file extension and MIME type based on blob type
+    let extension = 'mp3';
+    let mimeType = 'audio/mpeg';
+    if (audioBlob.type.includes('webm')) {
+      extension = 'webm';
+      mimeType = 'audio/webm';
+    } else if (audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp3')) {
+      extension = 'mp3';
+      mimeType = 'audio/mpeg';
+    }
+
+    // Convert Blob to File with correct extension
+    const audioFile = new File([audioBlob], `recording.${extension}`, { type: mimeType });
     await handleVoiceUpload(audioFile);
   };
 
