@@ -26,7 +26,7 @@ declare module 'ali-oss' {
     };
   }
 
-  export interface Options {
+  export type OSSOptions = {
     accessKeyId: string;
     accessKeySecret: string;
     bucket: string;
@@ -37,10 +37,10 @@ declare module 'ali-oss' {
     internal?: boolean;
     cname?: boolean;
     [key: string]: any; // Allow other options
-  }
+  };
 
   class OSS {
-    constructor(options: Options);
+    constructor(options: OSSOptions);
 
     put(
       name: string,

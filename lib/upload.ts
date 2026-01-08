@@ -37,19 +37,25 @@ function createOSSClient(): OSS {
     );
   }
 
-  const config: OSS.Options = {
+  const config = {
     accessKeyId,
     accessKeySecret,
     region,
     bucket,
+  } as const;
+  
+  const ossConfig: {
+    accessKeyId: string;
+    accessKeySecret: string;
+    region: string;
+    bucket: string;
+    endpoint?: string;
+  } = {
+    ...config,
+    ...(endpoint && { endpoint }),
   };
 
-  // Use custom endpoint if provided (for custom domain)
-  if (endpoint) {
-    config.endpoint = endpoint;
-  }
-
-  return new OSS(config);
+  return new OSS(ossConfig);
 }
 
 /**
