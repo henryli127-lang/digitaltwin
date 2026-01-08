@@ -63,7 +63,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Save file to local storage or Vercel Blob Storage
+    console.log('=== Starting File Upload ===');
+    console.log('File name:', file.name);
+    console.log('File size:', file.size, 'bytes');
+    console.log('File type:', file.type);
+    
     const fileUrl = await saveUploadedFile(file);
+    console.log('File saved, URL:', fileUrl);
     
     // Determine the full file URL
     let fullFileUrl: string;
@@ -72,10 +78,31 @@ export async function POST(request: NextRequest) {
     if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
       // Already a full URL from Blob Storage
       fullFileUrl = fileUrl;
+      console.log('Using Blob Storage URL:', fullFileUrl);
+      
+      // Verify the URL is accessible
+      try {
+        const testResponse = await fetch(fullFileUrl, { method: 'HEAD' });
+        console.log('URL accessibility test:', {
+          url: fullFileUrl,
+          status: testResponse.status,
+          statusText: testResponse.statusText,
+          contentType: testResponse.headers.get('content-type'),
+          contentLength: testResponse.headers.get('content-length'),
+        });
+        
+        if (!testResponse.ok) {
+          console.warn('⚠️ URL may not be accessible:', testResponse.status, testResponse.statusText);
+        }
+      } catch (error) {
+        console.error('❌ Failed to verify URL accessibility:', error);
+        // Don't fail here, just log the error - YiDevs will verify it
+      }
     } else {
       // Local development: construct full URL
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       fullFileUrl = `${baseUrl}${fileUrl}`;
+      console.log('Constructed local URL:', fullFileUrl);
 
       // Validate that the URL is publicly accessible (not localhost)
       const isDevelopment = process.env.NODE_ENV === 'development';
@@ -100,17 +127,33 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    
+    console.log('=== Final File URL for YiDevs ===');
+    console.log('Full URL:', fullFileUrl);
 
     // Clone voice or face using Yidevs API
     if (type === 'voice') {
+      console.log('=== Calling YiDevs Voice Clone API ===');
+      console.log('Audio URL to send:', fullFileUrl);
+      
       // YiDevs API requires audio_url (full URL), now using Blob Storage URL
       const result = await cloneVoice(fullFileUrl, name);
+      
+      console.log('=== Voice Clone Result ===');
+      console.log('Voice ID:', result.voiceId);
+      console.log('Name:', result.name);
+      
       return NextResponse.json({
         success: true,
         type: 'voice',
         voiceId: result.voiceId,
         name: result.name,
         fileUrl: fullFileUrl, // Return full URL for reference
+        debug: {
+          fileUrl: fullFileUrl,
+          fileSize: file.size,
+          fileType: file.type,
+        },
       });
     } else {
       // For face cloning, YiDevs API requires video_url (full URL) and callback_url

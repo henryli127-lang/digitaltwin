@@ -122,6 +122,40 @@ export async function cloneVoice(
   }
 
   try {
+    const requestBody = {
+      name,
+      audio_url: audioUrl,
+      description: description || `Voice clone for ${name}`,
+    };
+    
+    console.log('=== YiDevs Voice Clone API Request ===');
+    console.log('URL:', `${baseUrl}/app/human/human/Voice/clone`);
+    console.log('Request Body:', JSON.stringify(requestBody, null, 2));
+    console.log('Audio URL:', audioUrl);
+    
+    // Verify audio URL is accessible before sending to YiDevs
+    try {
+      const urlTestResponse = await fetch(audioUrl, { method: 'HEAD' });
+      console.log('Audio URL accessibility check:', {
+        url: audioUrl,
+        status: urlTestResponse.status,
+        statusText: urlTestResponse.statusText,
+        contentType: urlTestResponse.headers.get('content-type'),
+        contentLength: urlTestResponse.headers.get('content-length'),
+      });
+      
+      if (!urlTestResponse.ok) {
+        console.error('❌ Audio URL is not accessible! Status:', urlTestResponse.status);
+        throw new Error(`音频 URL 无法访问 (HTTP ${urlTestResponse.status}): ${audioUrl}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('音频 URL 无法访问')) {
+        throw error;
+      }
+      console.warn('⚠️ Could not verify audio URL accessibility:', error);
+      // Continue anyway - YiDevs will verify it
+    }
+    
     const response = await fetch(`${baseUrl}/app/human/human/Voice/clone`, {
       method: 'POST',
       headers: {
@@ -129,11 +163,7 @@ export async function cloneVoice(
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name,
-        audio_url: audioUrl,
-        description: description || `Voice clone for ${name}`,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();
