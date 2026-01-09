@@ -50,9 +50,13 @@ function createOSSClient(): OSS {
     region: string;
     bucket: string;
     endpoint?: string;
+    timeout?: number;
+    [key: string]: any;
   } = {
     ...config,
     ...(endpoint && { endpoint }),
+    // Increase timeout to 5 minutes (300000ms) for large file uploads
+    timeout: 300000, // 5 minutes
   };
 
   return new OSS(ossConfig);
@@ -98,10 +102,50 @@ async function uploadToOSS(file: File | ReadableStream<Uint8Array>): Promise<str
       buffer = Buffer.concat(chunks, totalLength);
     }
 
-    // Upload to OSS
-    const result = await client.put(filename, buffer, {
-      mime: mimeType,
-    });
+    // Upload to OSS with retry mechanism and timeout handling
+    let result: any;
+    const maxRetries = 3;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`OSS upload attempt ${attempt}/${maxRetries} for file: ${filename} (${(buffer.length / 1024 / 1024).toFixed(2)}MB)`);
+        
+        // Use regular put for all files (multipartUpload has different return format)
+        // The increased timeout should handle larger files
+        result = await client.put(filename, buffer, {
+          mime: mimeType,
+        });
+        
+        console.log(`✅ OSS upload successful on attempt ${attempt}`);
+        break; // Success, exit retry loop
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message || String(error);
+        console.error(`❌ OSS upload attempt ${attempt}/${maxRetries} failed:`, errorMessage);
+        
+        // Check if it's a timeout error
+        if (errorMessage.includes('timeout') || errorMessage.includes('Timeout')) {
+          console.warn(`⚠️  Upload timeout detected. This may be due to large file size or slow network.`);
+        }
+        
+        if (attempt < maxRetries) {
+          // Wait before retry (exponential backoff)
+          const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Max 10 seconds
+          console.log(`⏳ Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    if (!result) {
+      const errorMsg = lastError?.message || 'Unknown error';
+      throw new Error(
+        `Failed to upload to Aliyun OSS after ${maxRetries} attempts. Last error: ${errorMsg}. ` +
+        `File size: ${(buffer.length / 1024 / 1024).toFixed(2)}MB. ` +
+        `If the file is large, the upload may take longer than expected.`
+      );
+    }
 
     console.log('=== File Uploaded to Aliyun OSS ===');
     console.log('Filename:', filename);
