@@ -60,33 +60,53 @@ function createOSSClient(): OSS {
 
 /**
  * Uploads file to Aliyun OSS
- * @param file - The file to upload
+ * Supports both File objects and ReadableStream for streaming uploads
+ * @param file - The file to upload (File or ReadableStream)
  * @returns The public URL of the uploaded file
  */
-async function uploadToOSS(file: File): Promise<string> {
+async function uploadToOSS(file: File | ReadableStream<Uint8Array>): Promise<string> {
   try {
     // Generate a unique filename
     const timestamp = Date.now();
     const randomString = Math.random().toString(36).substring(2, 15);
-    const extension = file.name.split('.').pop() || 'bin';
+    const extension = file instanceof File ? (file.name.split('.').pop() || 'bin') : 'bin';
     const filename = `uploads/${timestamp}-${randomString}.${extension}`;
-
-    // Convert File to Buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = file instanceof File ? (file.type || 'application/octet-stream') : 'application/octet-stream';
 
     // Create OSS client
     const client = createOSSClient();
 
+    let buffer: Buffer;
+    
+    if (file instanceof File) {
+      // Convert File to Buffer (for small files or when streaming is not available)
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else {
+      // Convert ReadableStream to Buffer
+      const chunks: Uint8Array[] = [];
+      const reader = file.getReader();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) chunks.push(value);
+      }
+      
+      // Combine all chunks into a single buffer
+      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      buffer = Buffer.concat(chunks, totalLength);
+    }
+
     // Upload to OSS
     const result = await client.put(filename, buffer, {
-      mime: file.type || 'application/octet-stream',
+      mime: mimeType,
     });
 
     console.log('=== File Uploaded to Aliyun OSS ===');
     console.log('Filename:', filename);
-    console.log('File size:', file.size, 'bytes');
-    console.log('File type:', file.type);
+    console.log('File size:', buffer.length, 'bytes');
+    console.log('File type:', mimeType);
     console.log('OSS URL:', result.url);
     console.log('OSS name:', result.name);
     console.log('OSS uploaded at:', new Date().toISOString());

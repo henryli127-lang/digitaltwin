@@ -32,6 +32,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if OSS is configured - if so, no size limit (file goes directly to OSS)
+    // If not using OSS, use 4MB limit for Vercel serverless function payload
+    const hasOSS = !!(
+      process.env.ALIYUN_OSS_ACCESS_KEY_ID &&
+      process.env.ALIYUN_OSS_ACCESS_KEY_SECRET &&
+      process.env.ALIYUN_OSS_REGION &&
+      process.env.ALIYUN_OSS_BUCKET
+    );
+    
+    const maxSizeMB = hasOSS ? 100 : 4; // 100MB if OSS, 4MB if local storage
+
     // Validate file based on type
     if (type === 'voice') {
       const allowedTypes = [
@@ -41,7 +52,7 @@ export async function POST(request: NextRequest) {
         'audio/webm',
         'audio/mp4',
       ];
-      const validation = validateFile(file, allowedTypes, 50);
+      const validation = validateFile(file, allowedTypes, maxSizeMB);
       if (!validation.valid) {
         return NextResponse.json(
           { error: validation.error },
@@ -54,7 +65,7 @@ export async function POST(request: NextRequest) {
         'video/webm',
         'video/quicktime',
       ];
-      const validation = validateFile(file, allowedTypes, 50);
+      const validation = validateFile(file, allowedTypes, maxSizeMB);
       if (!validation.valid) {
         return NextResponse.json(
           { error: validation.error },

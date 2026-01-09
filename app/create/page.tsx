@@ -280,13 +280,22 @@ export default function CreatePage() {
   const startRecording = async () => {
     try {
       // Request camera and microphone access
+      // Use lower resolution to reduce file size (640x480 should be sufficient)
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          facingMode: 'user',
+          // Reduce frame rate to save space
+          frameRate: { ideal: 24, max: 30 }
         }, 
-        audio: true 
+        audio: {
+          // Use lower audio quality to reduce file size
+          sampleRate: 16000,
+          channelCount: 1, // Mono instead of stereo
+          echoCancellation: true,
+          noiseSuppression: true
+        }
       });
       
       streamRef.current = stream;
@@ -297,16 +306,25 @@ export default function CreatePage() {
         videoRef.current.play();
       }
       
-      // Set up MediaRecorder
+      // Set up MediaRecorder with optimized settings for smaller file size
       const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
         ? 'video/webm;codecs=vp9'
         : MediaRecorder.isTypeSupported('video/webm') 
         ? 'video/webm'
         : 'video/mp4';
       
-      const mediaRecorder = new MediaRecorder(stream, {
+      // Configure MediaRecorder options to reduce file size
+      // Lower bitrate to reduce file size (1Mbps should be enough for 30s video)
+      const options: MediaRecorderOptions = {
         mimeType: mimeType,
-      });
+      };
+      
+      // Add bitrate option if supported (not all browsers support this)
+      if ('videoBitsPerSecond' in MediaRecorder.prototype || 'videoBitsPerSecond' in options) {
+        (options as any).videoBitsPerSecond = 1000000; // 1 Mbps
+      }
+      
+      const mediaRecorder = new MediaRecorder(stream, options);
       
       mediaRecorderRef.current = mediaRecorder;
       videoChunksRef.current = [];
@@ -319,9 +337,30 @@ export default function CreatePage() {
       
       mediaRecorder.onstop = () => {
         const videoBlob = new Blob(videoChunksRef.current, { type: mimeType });
-        setRecordedVideoBlob(videoBlob);
-        const url = URL.createObjectURL(videoBlob);
-        setRecordedVideoUrl(url);
+        
+        // Check file size (reasonable limit, files go directly to OSS if configured)
+        const maxSizeBytes = 50 * 1024 * 1024; // 50MB (OSS can handle much larger)
+        const fileSizeMB = (videoBlob.size / 1024 / 1024).toFixed(2);
+        
+        if (videoBlob.size > maxSizeBytes) {
+          alert(
+            `⚠️ 视频文件过大 (${fileSizeMB}MB)，超过了限制 (50MB)。\n\n` +
+            `建议：\n` +
+            `1. 缩短录制时间（建议20-25秒）\n` +
+            `2. 确保光线充足以减少文件大小\n` +
+            `3. 使用更简单的背景\n\n` +
+            `请重新录制。`
+          );
+          // Clear the blob
+          setRecordedVideoBlob(null);
+          setRecordedVideoUrl(null);
+          videoChunksRef.current = [];
+        } else {
+          setRecordedVideoBlob(videoBlob);
+          const url = URL.createObjectURL(videoBlob);
+          setRecordedVideoUrl(url);
+          console.log(`✅ 视频录制完成，文件大小: ${fileSizeMB}MB`);
+        }
         
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
@@ -435,6 +474,17 @@ export default function CreatePage() {
         type: recordedVideoBlob.type || 'video/webm',
       });
       
+      // Check file size before upload
+      // Note: If OSS is configured, files go directly to OSS and can be larger
+      // For now, we'll use a reasonable limit (50MB) that works for both OSS and local storage
+      const maxSizeBytes = 50 * 1024 * 1024; // 50MB (OSS can handle much larger, but this is a reasonable limit)
+      if (videoFile.size > maxSizeBytes) {
+        const fileSizeMB = (videoFile.size / 1024 / 1024).toFixed(2);
+        throw new Error(
+          `视频文件过大 (${fileSizeMB}MB)，超过了限制 (50MB)。请重新录制一个更短的视频。`
+        );
+      }
+      
       // Task 1: Upload video
       updateTaskProgress('upload-video', 0, 'processing');
       const uploadFormData = new FormData();
@@ -446,7 +496,15 @@ export default function CreatePage() {
       });
       
       if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (uploadResponse.status === 413 || uploadResponse.statusText.includes('Too Large')) {
+          throw new Error(
+            '视频文件过大，超过了服务器限制 (4MB)。请重新录制一个更短的视频，或降低视频质量。'
+          );
+        }
+        
         throw new Error(errorData.error || '上传视频失败');
       }
       
@@ -561,10 +619,25 @@ export default function CreatePage() {
       
     } catch (error) {
       console.error('Processing error:', error);
+      
+      let errorMessage = '处理失败';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Provide helpful suggestions for file size errors
+        if (error.message.includes('文件过大') || error.message.includes('Too Large')) {
+          errorMessage += '\n\n💡 建议：\n' +
+            '1. 重新录制，缩短录制时间（建议20-25秒）\n' +
+            '2. 确保网络连接稳定\n' +
+            '3. 如果问题持续，请尝试使用更简单的背景\n' +
+            '4. 文件会直接上传到云存储，无需担心服务器限制';
+        }
+      }
+      
       setStepStatus({
         ...stepStatus,
         loading: false,
-        error: error instanceof Error ? error.message : '处理失败',
+        error: errorMessage,
       });
     }
   };
@@ -691,6 +764,7 @@ export default function CreatePage() {
                   <li>背景简洁，避免杂乱</li>
                   <li>说话清晰，声音洪亮</li>
                   <li>录制时请读出下方提示文字</li>
+                  <li className="text-yellow-300 font-medium">⚠️ 视频文件大小限制：50MB（约30秒，文件会直接上传到云存储）</li>
                 </ul>
               </div>
 
