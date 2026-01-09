@@ -235,21 +235,28 @@ export default function CreatePage() {
     });
   };
 
-  // Load saved state from localStorage
+  // Only check localStorage if coming from homepage (not when explicitly creating new)
   useEffect(() => {
+    // Check URL search params to see if we should skip auto-detection
+    const urlParams = new URLSearchParams(window.location.search);
+    const skipAutoDetect = urlParams.get('new') === 'true';
+    
+    if (skipAutoDetect) {
+      // Clear any existing data and start fresh
+      localStorage.removeItem('digital_replica_voice_id');
+      localStorage.removeItem('digital_replica_scene_id');
+      return;
+    }
+    
+    // Only auto-detect on first visit (not when explicitly creating)
     const savedVoiceId = localStorage.getItem('digital_replica_voice_id');
     const savedSceneId = localStorage.getItem('digital_replica_scene_id');
     
     if (savedVoiceId && savedSceneId) {
-      setStepStatus({
-        completed: true,
-        voiceId: savedVoiceId,
-        sceneId: savedSceneId,
-        loading: false,
-      });
-      setCurrentStep(3);
+      // If both exist, redirect to chat (user should go through homepage)
+      router.push('/chat');
     }
-  }, []);
+  }, [router]);
 
   // Cleanup on unmount
   useEffect(() => {
