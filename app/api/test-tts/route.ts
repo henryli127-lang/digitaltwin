@@ -33,10 +33,10 @@ export async function POST(request: NextRequest) {
     };
 
     console.log('=== Test TTS API Request ===');
-    console.log('URL:', `${baseUrl}/app/human/human/Voice/created`);
+    console.log('URL:', `${baseUrl}/app/human/human/Voice/deepCreated`);
     console.log('Request Body:', JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch(`${baseUrl}/app/human/human/Voice/created`, {
+    const response = await fetch(`${baseUrl}/app/human/human/Voice/deepCreated`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: data.code === 200,
       request: {
-        url: `${baseUrl}/app/human/human/Voice/created`,
+        url: `${baseUrl}/app/human/human/Voice/deepCreated`,
         body: requestBody,
       },
       response: {

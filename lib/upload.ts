@@ -186,7 +186,13 @@ export function validateFile(
   maxSizeMB: number = 50
 ): { valid: boolean; error?: string } {
   // Check file type
-  if (!allowedTypes.includes(file.type)) {
+  // Extract base MIME type (remove parameters like ;codecs=vp9)
+  const baseMimeType = file.type.split(';')[0].trim();
+  
+  // Check if exact type or base type matches
+  const isAllowed = allowedTypes.includes(file.type) || allowedTypes.includes(baseMimeType);
+  
+  if (!isAllowed) {
     return {
       valid: false,
       error: `File type ${file.type} is not allowed. Allowed types: ${allowedTypes.join(', ')}`,

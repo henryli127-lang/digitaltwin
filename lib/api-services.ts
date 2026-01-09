@@ -106,9 +106,9 @@ export async function generateReply(
 }
 
 /**
- * Yidevs Service - Voice Cloning
+ * Yidevs Service - Voice Cloning (Deep Clone)
  * Creates a voice clone using audio URL
- * API: https://api.yidevs.com/app/human/human/Voice/clone
+ * API: https://api.yidevs.com/app/human/human/Voice/deepClone
  */
 export async function cloneVoice(
   audioUrl: string,
@@ -130,7 +130,7 @@ export async function cloneVoice(
     };
     
     console.log('=== YiDevs Voice Clone API Request ===');
-    console.log('URL:', `${baseUrl}/app/human/human/Voice/clone`);
+    console.log('URL:', `${baseUrl}/app/human/human/Voice/deepClone`);
     console.log('Request Body:', JSON.stringify(requestBody, null, 2));
     console.log('Audio URL:', audioUrl);
     
@@ -157,7 +157,7 @@ export async function cloneVoice(
       // Continue anyway - YiDevs will verify it
     }
     
-    const response = await fetch(`${baseUrl}/app/human/human/Voice/clone`, {
+    const response = await fetch(`${baseUrl}/app/human/human/Voice/deepClone`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -288,10 +288,11 @@ export async function cloneFace(
 }
 
 /**
- * Yidevs Service - Text to Speech
+ * Yidevs Service - Text to Speech (Deep Voice)
  * Generates audio from text using a cloned voice
- * API: https://api.yidevs.com/app/human/human/Voice/created
- * Pricing: Free
+ * API: https://api.yidevs.com/app/human/human/Voice/deepCreated
+ * Pricing: 1积分/20个字
+ * Emotion and pause control: https://api.yidevs.com/template/deep_voice_emotion_list.html
  */
 export async function generateAudio(
   text: string,
@@ -311,14 +312,14 @@ export async function generateAudio(
     };
     
     console.log('YiDevs TTS API Request:', {
-      url: `${baseUrl}/app/human/human/Voice/created`,
+      url: `${baseUrl}/app/human/human/Voice/deepCreated`,
       body: {
         text: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
         voice_id: voiceId,
       },
     });
     
-    const response = await fetch(`${baseUrl}/app/human/human/Voice/created`, {
+    const response = await fetch(`${baseUrl}/app/human/human/Voice/deepCreated`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,

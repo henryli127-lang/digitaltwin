@@ -20,13 +20,13 @@ const testTTS = async () => {
   };
 
   console.log('=== YiDevs TTS API Test ===');
-  console.log('URL:', `${baseUrl}/app/human/human/Voice/created`);
+  console.log('URL:', `${baseUrl}/app/human/human/Voice/deepCreated`);
   console.log('Request Body:', JSON.stringify(requestBody, null, 2));
   console.log('API Key:', apiKey.substring(0, 10) + '...');
   console.log('\nSending request...\n');
 
   try {
-    const response = await fetch(`${baseUrl}/app/human/human/Voice/created`, {
+    const response = await fetch(`${baseUrl}/app/human/human/Voice/deepCreated`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
