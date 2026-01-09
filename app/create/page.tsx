@@ -123,8 +123,8 @@ export default function CreatePage() {
 
   // Convert WAV to MP3 using lamejs
   const wavToMp3 = async (wav: ArrayBuffer): Promise<Uint8Array> => {
-    // Dynamically import lamejs (CommonJS module)
-    const lamejs = await import('lamejs');
+    // Dynamically import @breezystack/lamejs (fixed version with MPEGMode support)
+    const lamejs = await import('@breezystack/lamejs');
     
     const wavView = new DataView(wav);
     const sampleRate = wavView.getUint32(24, true);
