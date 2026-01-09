@@ -60,7 +60,7 @@ export default function CreatePage() {
           const wav = audioBufferToWav(audioBuffer);
           
           // Convert WAV to MP3 using lamejs
-          const mp3Data = wavToMp3(wav);
+          const mp3Data = await wavToMp3(wav);
           
           const mp3Blob = new Blob([new Uint8Array(mp3Data)], { type: 'audio/mpeg' });
           resolve(mp3Blob);
@@ -122,7 +122,10 @@ export default function CreatePage() {
   };
 
   // Convert WAV to MP3 using lamejs
-  const wavToMp3 = (wav: ArrayBuffer): Uint8Array => {
+  const wavToMp3 = async (wav: ArrayBuffer): Promise<Uint8Array> => {
+    // Dynamically import lamejs (CommonJS module)
+    const lamejs = await import('lamejs');
+    
     const wavView = new DataView(wav);
     const sampleRate = wavView.getUint32(24, true);
     const numChannels = wavView.getUint16(22, true);
@@ -130,7 +133,7 @@ export default function CreatePage() {
     const dataLength = wavView.getUint32(40, true);
     const samples = new Int16Array(wav, dataOffset, dataLength / 2);
 
-    // @ts-ignore
+    // @ts-ignore - lamejs types may not be perfect
     const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
     const sampleBlockSize = 1152;
     const mp3Data: number[] = [];
