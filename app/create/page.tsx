@@ -133,7 +133,6 @@ export default function CreatePage() {
     const dataLength = wavView.getUint32(40, true);
     const samples = new Int16Array(wav, dataOffset, dataLength / 2);
 
-    // @ts-ignore - lamejs types may not be perfect
     const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, 128);
     const sampleBlockSize = 1152;
     const mp3Data: number[] = [];
